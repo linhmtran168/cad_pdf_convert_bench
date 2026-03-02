@@ -32,8 +32,15 @@ Thumbs.db
 ## Config (contains license secrets)
 appsettings.json
 
+## Keys (strong name signing)
+keys/
+
 ## Output files
 *.pdf
 *.csv
 results/
 benchmark/
+
+## Claude
+.claude/settings.local.json
+

@@ -42,13 +42,14 @@ dotnet run -- convert aspose -i drawing.dwg --license /path/to/Aspose.CAD.lic
 
 ```bash
 dotnet run -- convert cadlib -i drawing.dwg
-dotnet run -- convert cadlib -i drawing.dwg -o output.pdf
+dotnet run -- convert cadlib -i drawing.dwg -o output.pdf --license "<license-string>"
 ```
 
 | Option | Description |
 |--------|-------------|
 | `-i, --input` | Path to the input CAD file (DWG/DXF). Required. |
 | `-o, --output` | Output PDF path. Defaults to `<input>.cadlib.pdf`. |
+| `--license` | CadLib (WoutWare) license string. |
 
 ### Benchmark both libraries
 
@@ -67,6 +68,7 @@ dotnet run -- benchmark -i drawing.dwg --output-dir ./output --aspose-license /p
 | `--output-csv` | Export results to a CSV file. |
 | `--output-dir` | Directory for output PDFs. Default: temp directory. |
 | `--aspose-license` | Path to an Aspose.CAD license file. |
+| `--cadlib-license` | CadLib (WoutWare) license string. |
 | `--layout` | Specific layout name to export (Aspose only). |
 
 ### Benchmarked metrics
@@ -91,9 +93,73 @@ dotnet run -- benchmark -i drawing.dwg --output-dir ./output --aspose-license /p
 ╰───────────────────┴────────┴────────────┴────────────┴──────────┴─────────────┴──────────────┴─────────────╯
 ```
 
-## Licensing notes
+## Configuration
 
-- **Aspose.CAD** runs in trial mode without a license file. Output PDFs will contain an evaluation watermark. Pass `--license` to use a purchased license.
-- **CadLib (WW.Cad)** uses the trial NuGet package (`WW.Cad_Net8.0`). A trial license from [woutware.com](https://www.woutware.com) is required for full functionality.
+License values can be provided via CLI flags or an `appsettings.json` config file. CLI flags take priority over config file values.
+
+1. Copy the sample config:
+   ```bash
+   cp appsettings.sample.json appsettings.json
+   ```
+
+2. Edit `appsettings.json` with your license values:
+   ```json
+   {
+     "Licenses": {
+       "AsposeCadLicensePath": "/path/to/Aspose.CAD.lic",
+       "CadLibLicenseString": "<license-string-from-woutware>"
+     }
+   }
+   ```
+
+`appsettings.json` is git-ignored to keep secrets out of version control.
+
+## Licensing
+
+### Aspose.CAD
+
+Runs in trial mode without a license file (output PDFs contain an evaluation watermark). Pass `--license` or set `AsposeCadLicensePath` in `appsettings.json` to use a purchased license.
+
+### CadLib (WoutWare)
+
+Uses the trial NuGet package (`WW.Cad_Net8.0`). A trial license from [woutware.com](https://www.woutware.com) is required for full functionality.
+
+**To obtain a CadLib trial license**, WoutWare requires your assembly's public key token. The assembly must be signed with a strong name key.
+
+#### Generating a strong name key
+
+A helper script is provided in `scripts/generate-snk.csproj`:
+
+```bash
+cd scripts
+dotnet run -- ../keys
+```
+
+This generates:
+
+| File | Description |
+|------|-------------|
+| `keys/MyKeyPair.snk` | Strong name key pair (signs the assembly) |
+| `keys/MyPublicKey.snk` | Extracted public key |
+
+The script also prints the **public key token** — submit this to WoutWare when requesting a trial license.
+
+If you need to regenerate keys, just run the script again. The `keys/` directory is git-ignored.
+
+#### Assembly signing
+
+The project is already configured to sign with `keys/MyKeyPair.snk` in `CadBenchmark.csproj`:
+
+```xml
+<SignAssembly>true</SignAssembly>
+<AssemblyOriginatorKeyFile>keys/MyKeyPair.snk</AssemblyOriginatorKeyFile>
+```
+
+#### Steps to get a CadLib trial license
+
+1. Generate a strong name key (see above)
+2. Note the **public key token** printed by the script
+3. Go to [woutware.com](https://www.woutware.com) and request a trial license using your public key token
+4. Add the received license string to `appsettings.json` under `CadLibLicenseString`, or pass it via `--license` / `--cadlib-license`
 
 Trial watermarks do not affect benchmark timing results.
