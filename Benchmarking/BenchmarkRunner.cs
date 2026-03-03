@@ -14,13 +14,17 @@ public static class BenchmarkRunner
 
         var process = Process.GetCurrentProcess();
 
-        // Force GC before measuring
-        GC.Collect();
+        // Force GC before measuring to get a clean baseline
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
         GC.WaitForPendingFinalizers();
-        GC.Collect();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
 
-        var memoryBefore = GC.GetTotalMemory(true);
+        process.Refresh();
+        var wsBefore = process.WorkingSet64;
         var cpuBefore = process.TotalProcessorTime;
+
+        // Track peak working set manually (PeakWorkingSet64 is unreliable on macOS)
+        long peakMemory = wsBefore;
 
         totalStopwatch.Start();
 
@@ -44,14 +48,22 @@ public static class BenchmarkRunner
                 iterationStopwatch.Stop();
 
                 iterationTimes.Add(iterationStopwatch.Elapsed);
+
+                // Sample working set after each iteration
+                process.Refresh();
+                var currentMemory = process.WorkingSet64;
+                if (currentMemory > peakMemory) peakMemory = currentMemory;
             }
 
             totalStopwatch.Stop();
 
             process.Refresh();
             var cpuAfter = process.TotalProcessorTime;
-            var peakMemory = process.PeakWorkingSet64;
-            var memoryAfter = GC.GetTotalMemory(false);
+            var wsAfter = process.WorkingSet64;
+            if (wsAfter > peakMemory) peakMemory = wsAfter;
+
+            // Memory delta = WorkingSet change (captures both managed + native allocations)
+            var memoryDelta = wsAfter - wsBefore;
 
             var outputFileSize = File.Exists(lastOutputPath) ? new FileInfo(lastOutputPath).Length : 0;
 
@@ -62,7 +74,7 @@ public static class BenchmarkRunner
                 ElapsedTime = totalStopwatch.Elapsed,
                 CpuTime = cpuAfter - cpuBefore,
                 PeakMemoryBytes = peakMemory,
-                MemoryDeltaBytes = memoryAfter - memoryBefore,
+                MemoryDeltaBytes = memoryDelta,
                 InputFileSizeBytes = inputFileSize,
                 OutputFileSizeBytes = outputFileSize,
                 IterationTimes = iterationTimes,

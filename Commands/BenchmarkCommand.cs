@@ -66,8 +66,8 @@ public sealed class BenchmarkCommand : Command<BenchmarkCommand.Settings>
 
         var converters = new IConverter[]
         {
-            new AsposeCadConverter(asposeLicensePath, settings.LayoutName),
             new CadLibConverter(cadLibLicenseString),
+            new AsposeCadConverter(asposeLicensePath, settings.LayoutName),
         };
 
         var results = new List<ConversionResult>();
