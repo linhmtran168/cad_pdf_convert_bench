@@ -31,15 +31,6 @@ public class AsposeCadConverter : IConverter
             PageWidth = 1600,
             PageHeight = 1200,
             AutomaticLayoutsScaling = true,
-            Quality = new RasterizationQuality
-            {
-                Arc = RasterizationQualityValue.Medium,
-                Hatch = RasterizationQualityValue.Medium,
-                Text = RasterizationQualityValue.Medium,
-                Ole = RasterizationQualityValue.Medium,
-                ObjectsPrecision = RasterizationQualityValue.Medium,
-                TextThicknessNormalization = true,
-            },
         };
 
         if (_layoutName is not null)
@@ -51,6 +42,10 @@ public class AsposeCadConverter : IConverter
         {
             VectorRasterizationOptions = rasterizationOptions,
         };
+
+        rasterizationOptions.GraphicsOptions.SmoothingMode = SmoothingMode.HighQuality;
+        rasterizationOptions.GraphicsOptions.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        rasterizationOptions.GraphicsOptions.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
         image.Save(outputPath, pdfOptions);
     }
