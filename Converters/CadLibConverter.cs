@@ -9,6 +9,7 @@ using WW.Drawing;
 using WW.Drawing.Printing;
 using WW.Math;
 using WW.Math.Geometry;
+using System.Threading;
 
 namespace CadBenchmark.Converters;
 
@@ -29,7 +30,7 @@ public class CadLibConverter : IConverter
     // PlotOptions wraps GraphicsConfig + paper size + plot settings
     private static readonly PlotOptions SharedPlotOptions;
 
-    private static bool _initialized;
+    private static int _initialized;
 
     static CadLibConverter()
     {
@@ -54,8 +55,7 @@ public class CadLibConverter : IConverter
 
     private static void InitializeOnce()
     {
-        if (_initialized) return;
-        _initialized = true;
+        if (Interlocked.Exchange(ref _initialized, 1) == 1) return;
 
         RegisterSystemFontDirectories();
         DxfModel.FontSubstitution = new ArialUnicodeFallbackFontSubstitution();
@@ -72,20 +72,32 @@ public class CadLibConverter : IConverter
         pdfExporter.EmbedFonts = true;
 
         var drawableStore = new DrawableStore();
-
-        foreach (DxfLayout layout in model.OrderedLayouts)
+        try
         {
-            AddLayoutPage(pdfExporter, options, drawableStore, model, layout);
+            foreach (DxfLayout layout in model.OrderedLayouts)
+            {
+                AddLayoutPage(pdfExporter, options, drawableStore, model, layout);
+            }
         }
-
-        pdfExporter.EndDocument();
+        finally
+        {
+            pdfExporter.EndDocument();
+        }
     }
 
     private static void RegisterSystemFontDirectories()
     {
         var fontDirs = new List<string>();
 
-        if (OperatingSystem.IsMacOS())
+        if (OperatingSystem.IsWindows())
+        {
+            fontDirs.AddRange([
+                Environment.GetFolderPath(Environment.SpecialFolder.Fonts),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Fonts"),
+            ]);
+        }
+        else if (OperatingSystem.IsMacOS())
         {
             fontDirs.AddRange([
                 "/System/Library/Fonts",
@@ -103,7 +115,11 @@ public class CadLibConverter : IConverter
             ]);
         }
 
-        var existing = fontDirs.Where(Directory.Exists).ToArray();
+        var existing = fontDirs
+            .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         if (existing.Length > 0)
         {
             DxfModel.AddGlobalShxLookupDirectories(existing);
@@ -225,15 +241,15 @@ public class CadLibConverter : IConverter
                     {
                         case PlotPaperUnits.Millimeters:
                             paperSize = new PaperSize(
-                                Guid.NewGuid().ToString(),
-                                (int)(plotAreaBounds.Delta.X * 100d / 25.4d),
-                                (int)(plotAreaBounds.Delta.Y * 100d / 25.4d));
+                                layout.PaperSizeName,
+                                (int)Math.Round(layout.PlotPaperSize.X * 100d / 25.4d),
+                                (int)Math.Round(layout.PlotPaperSize.Y * 100d / 25.4d));
                             break;
                         case PlotPaperUnits.Inches:
                             paperSize = new PaperSize(
-                                Guid.NewGuid().ToString(),
-                                (int)(plotAreaBounds.Delta.X * 100d),
-                                (int)(plotAreaBounds.Delta.Y * 100d));
+                                layout.PaperSizeName,
+                                (int)Math.Round(layout.PlotPaperSize.X * 100d),
+                                (int)Math.Round(layout.PlotPaperSize.Y * 100d));
                             break;
                         case PlotPaperUnits.Pixels:
                             // No physical paper units — fall back below
@@ -307,16 +323,26 @@ public class CadLibConverter : IConverter
 
 internal class ArialUnicodeFallbackFontSubstitution : IFontSubstitution
 {
-    public static readonly IList<string> FileFallbacks = ["Arial Unicode.ttf", "Arial Unicode MS.ttf"];
-    public static readonly IList<string> FamilyFallbacks = ["Arial Unicode MS", "Arial Unicode"];
+    public static readonly IList<string> WindowsFileFallbacks = ["meiryo.ttc", "YuGothR.ttc"];
+    public static readonly IList<string> WindowsFamilyFallbacks = ["Meiryo", "Yu Gothic Regular"];
+
+    public static readonly IList<string> MacFileFallbacks = ["Arial Unicode.ttf", "Arial Unicode MS.ttf", "Arial.ttf", "Helvetica.ttc"];
+    public static readonly IList<string> MacFamilyFallbacks = ["Arial Unicode MS", "Arial Unicode", "Arial", "Helvetica"];
+
+    public static readonly IList<string> LinuxFileFallbacks = ["DejaVuSans.ttf", "NotoSans-Regular.ttf", "Arial Unicode.ttf"];
+    public static readonly IList<string> LinuxFamilyFallbacks = ["DejaVu Sans", "Noto Sans", "Arial Unicode"];
 
     public IList<string>? GetPreferredSubstitionFontFileNames(string fontFileName)
     {
-        return FileFallbacks;
+        if (OperatingSystem.IsWindows()) return WindowsFileFallbacks;
+        if (OperatingSystem.IsMacOS()) return MacFileFallbacks;
+        return LinuxFileFallbacks;
     }
 
     public IList<string>? GetPreferredSubstitionFontFamilyNames(string fontFamilyName)
     {
-        return FamilyFallbacks;
+        if (OperatingSystem.IsWindows()) return WindowsFamilyFallbacks;
+        if (OperatingSystem.IsMacOS()) return MacFamilyFallbacks;
+        return LinuxFamilyFallbacks;
     }
 }
