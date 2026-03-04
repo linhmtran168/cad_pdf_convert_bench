@@ -35,12 +35,17 @@ appsettings.json
 ## Keys (strong name signing)
 keys/
 
+## Publish output
+publish/
+
 ## Output files
 *.pdf
 *.csv
 results/
 benchmark/
 
+## Reports
+REPORT.md
+
 ## Claude
 .claude/settings.local.json
-
